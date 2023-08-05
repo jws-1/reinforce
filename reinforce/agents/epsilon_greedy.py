@@ -1,30 +1,31 @@
-from reinforce.agents.base import BaseAgent
+from reinforce.agents.q_learning import QLearning
 
+import gym
 import numpy as np
+import math
+from typing import Optional, Callable
 
 
-class EpsilonGreedyAgent(BaseAgent):
-    def train(
-        self, num_episodes=1000, q_0=0.0, epsilon=0.1, alpha=0.1, gamma=1.0
-    ) -> np.array:
-        rewards = np.zeros(num_episodes)
-        N_s = self.env.nS
-        N_a = self.env.nA
-        Q = np.full(
-            (N_s, N_a),
-            fill_value=q_0,
-        )
+class EpsilonGreedy(QLearning):
+    def __init__(
+        self,
+        env: gym.Env,
+        q_0: Optional[np.float32] = 0.0,
+        learning_rate: Optional[np.float32] = 0.1,
+        epsilon: Optional[np.float32] = 0.5,
+        decay_fn: Optional[Callable[[np.float32], np.float32]] = lambda e: e,
+    ):
+        self.epsilon = self.epsilon_0 = epsilon
+        self.decay_fn = decay_fn
+        super().__init__(env, q_0, learning_rate)
 
-        for i in range(num_episodes):
-            s, _ = self.env.reset()
-            done = False
-            while not done:
-                if np.random.rand() < epsilon:
-                    a = self.env.action_space.sample()
-                else:
-                    a = np.argmax(Q[s])
-                s_1, r, done, _, _ = self.env.step(a)
-                Q[s, a] = alpha * (r + gamma * np.max(Q[s_1]) - Q[s, a])
-                s = s_1
-                rewards[i] += r
-        return rewards
+    def select_action(self, state):
+        if np.random.rand() < self.epsilon:
+            return self.env.action_space.sample()
+        else:
+            return np.argmax(self.Q[state])
+
+    def update(self, state, action, next_state, reward, done):
+        if done:
+            self.epsilon = self.decay_fn(self.epsilon)
+        return super().update(state, action, next_state, reward, done)
